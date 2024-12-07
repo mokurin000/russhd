@@ -91,6 +91,7 @@ impl server::Handler for Server {
                 if *id != self.id {
                     let mut tokio = unsafe { async_scoped::TokioScope::create(Tokio) };
                     tokio.spawn(async {
+                        log::info!("spawned data send");
                         let _ = s.data(*channel, CryptoVec::from_slice(data)).await;
                     });
                 }
@@ -108,6 +109,7 @@ fn show_secret_key(secret_key: SecretKey) -> anyhow::Result<()> {
     eprintln!("{ssh_key}");
 
     if cfg!(debug_assertions) {
+        let _ = fs::set_permissions("priv.key", Permissions::from_mode(0o600));
         fs::write("priv.key", ssh_key)?;
         fs::set_permissions("priv.key", Permissions::from_mode(0o400))?;
         log::info!("SSH key written to priv.key");
