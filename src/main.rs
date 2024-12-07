@@ -3,25 +3,17 @@ use key::ed25519::SecretKey;
 use ssh_key::private::Ed25519Keypair;
 use ssh_key::PrivateKey;
 use std::collections::HashMap;
+use std::fs::{self, Permissions};
+use std::os::unix::fs::PermissionsExt;
 use std::sync::{Arc, Mutex};
 use thrussh::server::{Auth, Session};
 use thrussh::*;
 use thrussh_keys::*;
 
-fn show_secret_key(secret_key: SecretKey) -> anyhow::Result<()> {
-    let keypair: Ed25519Keypair = Ed25519Keypair::from_bytes(&secret_key.key)?;
-    eprintln!(
-        "{}",
-        PrivateKey::from(keypair)
-            .to_openssh(ssh_key::LineEnding::LF)?
-            .as_str()
-    );
-
-    Ok(())
-}
-
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    pretty_env_logger::init_timed();
+
     let client_key = thrussh_keys::key::KeyPair::generate_ed25519().unwrap();
     let client_pubkey = Arc::new(client_key.clone_public_key());
     let mut config = thrussh::server::Config::default();
@@ -107,4 +99,19 @@ impl server::Handler for Server {
         session.data(channel, CryptoVec::from_slice(data));
         self.finished(session)
     }
+}
+
+fn show_secret_key(secret_key: SecretKey) -> anyhow::Result<()> {
+    let keypair: Ed25519Keypair = Ed25519Keypair::from_bytes(&secret_key.key)?;
+    let ssh_key = PrivateKey::from(keypair).to_openssh(ssh_key::LineEnding::LF)?;
+    let ssh_key = ssh_key.as_str();
+    eprintln!("{ssh_key}");
+
+    if cfg!(debug_assertions) {
+        fs::write("priv.key", ssh_key)?;
+        fs::set_permissions("priv.key", Permissions::from_mode(0o400))?;
+        log::info!("SSH key written to priv.key");
+    }
+
+    Ok(())
 }
